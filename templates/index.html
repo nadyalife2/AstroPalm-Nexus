@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AstroPalm Nexus • Синтез Натальной Карты и Хиромантии</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Dynamic Starry Sky Canvas -->
+  <canvas id="stars-canvas"></canvas>
+
+  <div class="app-wrapper">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">✧</div>
+        <div class="brand-text">
+          <h1>ASTROPALM NEXUS</h1>
+          <p>Синтез Швейцарских Эфемерид & Компьютерного Анализа Ладони</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-open-hand-guide" class="btn-pill" title="Инструкция по замеру и типам руки">
+          <span>📖</span> Инструкция по типам рук
+        </button>
+        <button id="btn-export-report" class="btn-pill" title="Скачать отчет в Markdown">
+          <span>📥</span> Экспорт отчета
+        </button>
+        <button onclick="window.print()" class="btn-pill" title="Печать">
+          <span>🖨️</span> Печать
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="main-content">
+      
+      <!-- Control Hub & Data Input -->
+      <section class="control-hub">
+        <div class="hub-title">
+          <h2><span>🪐</span> Ввод данных рождения и профили</h2>
+          <div class="presets-container" id="presets-container">
+            <!-- Loaded dynamically from API -->
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="person-name">Имя субъекта</label>
+            <input type="text" id="person-name" class="form-input" value="Иван">
+          </div>
+
+          <div class="form-group">
+            <label for="birth-date">Дата рождения (ДД.ММ.ГГГГ или ГГГГ-ММ-ДД)</label>
+            <input type="text" id="birth-date" class="form-input" value="1995-08-14" placeholder="20.09.1992 или 1992-09-20">
+          </div>
+
+          <div class="form-group">
+            <label for="birth-time">Время рождения (ЧЧ:ММ)</label>
+            <input type="text" id="birth-time" class="form-input" value="13:45" placeholder="07:50 или 13:45">
+          </div>
+
+          <div class="form-group">
+            <label for="birth-city">Город рождения (Поиск)</label>
+            <input type="text" id="birth-city" class="form-input" value="Москва" placeholder="Начните вводить город..." autocomplete="off">
+            <div id="geo-dropdown" class="geo-results-dropdown"></div>
+          </div>
+
+          <div class="form-group" style="display:none;">
+            <input type="hidden" id="birth-lat" value="55.7558">
+            <input type="hidden" id="birth-lon" value="37.6173">
+            <input type="hidden" id="birth-tz" value="Europe/Moscow">
+          </div>
+        </div>
+
+        <div class="form-submit-row" style="display:flex; flex-direction:column; align-items:center; gap:10px;">
+          <button id="btn-calculate" class="btn-pill primary" style="min-width:320px; justify-content:center; padding:12px 24px; font-size:0.95rem;">
+            <span id="btn-calc-icon">✨</span> <span id="btn-calc-text">Рассчитать натальную карту и синтез</span>
+          </button>
+          <div id="calc-status-message" style="display:none; font-size:0.88rem; padding:8px 16px; border-radius:20px; max-width:800px; text-align:center; transition:all 0.3s ease;"></div>
+        </div>
+      </section>
+
+      <!-- Dual Display Grid: Natal Chart & Palmistry -->
+      <section class="dual-display-grid">
+        
+        <!-- Left Panel: Interactive Astrological Wheel -->
+        <div class="card-panel">
+          <div class="panel-header">
+            <h3><span>🌌</span> Натальная Карта (Swiss Ephemeris)</h3>
+            <span id="astro-element-badge" class="badge-tag fire">Огонь (Кардинальный)</span>
+          </div>
+
+          <div class="wheel-wrapper">
+            <div id="natal-svg-container"></div>
+            <div id="wheel-tooltip" class="wheel-tooltip"></div>
+          </div>
+
+          <div id="natal-summary-text" style="margin-top:1.25rem; font-size:0.84rem; color:var(--text-main); background:rgba(255,255,255,0.02); padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Right Panel: Interactive Palmistry Visualizer & 4-Slot Studio -->
+        <div class="card-panel">
+          <div class="panel-header">
+            <h3><span>✋</span> Анализ Рук (4-х Ракурсная Студия)</h3>
+            <span id="palm-element-badge" class="badge-tag fire">Рука Огня</span>
+          </div>
+
+          <!-- Hand Selector Tabs -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; gap:0.4rem;" id="hand-view-tabs">
+              <button class="btn-pill active" data-view="right_palm">Правая (Ладонь)</button>
+              <button class="btn-pill" data-view="right_dorsal">Правая (Снаружи)</button>
+              <button class="btn-pill" data-view="left_palm">Левая (Ладонь)</button>
+              <button class="btn-pill" data-view="left_dorsal">Левая (Снаружи)</button>
+            </div>
+            <span id="joint-auto-status" style="font-size:0.78rem; color:var(--accent-gold); font-weight:500;">
+              Суставы: Узловатые (Философские)
+            </span>
+          </div>
+
+          <div class="palm-wrapper">
+            <canvas id="palm-canvas" width="400" height="500"></canvas>
+          </div>
+
+          <!-- Controls: Mirror Flip & Quick Mount Marking & Drag Hint -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.6rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap;">
+              <button id="btn-toggle-mirror" class="btn-pill" style="font-size:0.75rem; padding:0.35rem 0.8rem; background:rgba(255,255,255,0.06); border:1px solid var(--accent-gold); color:var(--accent-gold);" title="Сменить положение большого пальца (Справа или Слева)">
+                <span>🔄</span> Отразить руку
+              </button>
+              <button id="btn-autofit-hand" class="btn-pill" style="font-size:0.75rem; padding:0.35rem 0.8rem; background:rgba(56,239,125,0.1); border:1px solid rgba(56,239,125,0.4); color:#86efac;" title="Автоматически подогнать размер сетки под фото">
+                <span>🎯</span> Автоподгонка
+              </button>
+              <button id="btn-reset-hand" class="btn-pill" style="font-size:0.75rem; padding:0.35rem 0.8rem; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#cbd5e1;" title="Сбросить точки и масштаб в исходное положение">
+                <span>↺</span> Сброс
+              </button>
+            </div>
+            <span style="font-size:0.75rem; color:var(--accent-gold); background:rgba(246,200,95,0.1); padding:0.25rem 0.6rem; border-radius:12px; border:1px solid rgba(246,200,95,0.3);">
+              🖐️ Перетаскивайте точки мышкой прямо по руке!
+            </span>
+          </div>
+
+          <!-- Fine-Tuning Calibration Sliders Panel -->
+          <div style="margin-top:0.75rem; background:rgba(255,255,255,0.03); padding:0.75rem 0.9rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+              <span style="font-size:0.74rem; font-weight:600; color:#e2e8f0; text-transform:uppercase; letter-spacing:0.04em;">
+                🎛️ Калибровка сетки под ракурс фото:
+              </span>
+              <span id="calib-active-tag" style="font-size:0.7rem; color:var(--accent-emerald);">Живая адаптация</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.6rem; font-size:0.76rem;">
+              <div>
+                <div style="display:flex; justify-content:space-between; color:var(--text-muted); margin-bottom:2px;">
+                  <span>🔍 Масштаб:</span>
+                  <strong id="slider-scale-val" style="color:#fff;">100%</strong>
+                </div>
+                <input type="range" id="slider-scale" min="50" max="150" value="100" style="width:100%; accent-color:var(--accent-gold); cursor:pointer;">
+              </div>
+
+              <div>
+                <div style="display:flex; justify-content:space-between; color:var(--text-muted); margin-bottom:2px;">
+                  <span>↕️ Высота (Y):</span>
+                  <strong id="slider-offset-y-val" style="color:#fff;">0px</strong>
+                </div>
+                <input type="range" id="slider-offset-y" min="-120" max="120" value="0" style="width:100%; accent-color:#00d2ff; cursor:pointer;">
+              </div>
+
+              <div>
+                <div style="display:flex; justify-content:space-between; color:var(--text-muted); margin-bottom:2px;">
+                  <span>↔️ Сдвиг (X):</span>
+                  <strong id="slider-offset-x-val" style="color:#fff;">0px</strong>
+                </div>
+                <input type="range" id="slider-offset-x" min="-120" max="120" value="0" style="width:100%; accent-color:#a78bfa; cursor:pointer;">
+              </div>
+
+              <div>
+                <div style="display:flex; justify-content:space-between; color:var(--text-muted); margin-bottom:2px;">
+                  <span>🔄 Наклон:</span>
+                  <strong id="slider-rot-val" style="color:#fff;">0°</strong>
+                </div>
+                <input type="range" id="slider-rot" min="-30" max="30" value="0" style="width:100%; accent-color:#f472b6; cursor:pointer;">
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:0.75rem; background:rgba(255,255,255,0.02); padding:0.6rem 0.8rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-bottom:0.35rem; text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between;">
+              <span>📍 Быстрая отметка и калибровка бугров:</span>
+              <span style="color:var(--accent-gold); font-size:10px;">Кликните холм для настройки</span>
+            </div>
+            <div style="display:flex; gap:0.35rem; flex-wrap:wrap;" id="mount-quick-chips"></div>
+          </div>
+
+          <!-- Line Origins Calibration Toolbar -->
+          <div style="margin-top:0.6rem; background:rgba(255,255,255,0.02); padding:0.6rem 0.8rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between; align-items:center;">
+              <span>〰️ Анатомия истоков (Линия Жизни & Головы):</span>
+              <span id="line-separation-status" style="color:#38ef7d; font-size:11px; font-weight:600;">Разделены (Независимость)</span>
+            </div>
+            <div style="display:flex; gap:0.4rem; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn-chip" id="btn-set-separated" title="Установить анатомический зазор между началом жизни и головы" style="background:rgba(56,239,125,0.12); border:1px solid rgba(56,239,125,0.4); color:#86efac; font-size:11px; padding:3px 8px; border-radius:12px; cursor:pointer;">
+                ✂️ Раздельный старт (Свобода)
+              </button>
+              <button type="button" class="btn-chip" id="btn-set-joined" title="Соединить истоки линии жизни и головы в одну точку" style="background:rgba(246,200,95,0.12); border:1px solid rgba(246,200,95,0.4); color:#fde047; font-size:11px; padding:3px 8px; border-radius:12px; cursor:pointer;">
+                🔗 Слитный старт (Осторожность)
+              </button>
+              <button type="button" class="btn-chip" id="btn-toggle-anchors" title="Включить/выключить маркеры подгонки линий" style="background:rgba(255,255,255,0.05); border:1px solid var(--border-subtle); color:#e2e8f0; font-size:11px; padding:3px 8px; border-radius:12px; cursor:pointer;">
+                🎯 Точки линий: Вкл
+              </button>
+              <button type="button" class="btn-chip" id="btn-reset-lines" title="Сбросить линии к результату авто-сканирования" style="background:rgba(255,255,255,0.05); border:1px solid var(--border-subtle); color:#94a3b8; font-size:11px; padding:3px 8px; border-radius:12px; cursor:pointer;">
+                ↩️ Сброс
+              </button>
+            </div>
+          </div>
+
+          <!-- 4 Upload Slots Grid -->
+          <div style="margin-top:1.25rem;">
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.05em; display:flex; justify-content:space-between;">
+              <span>📸 Загрузка ракурсов (Золотой стандарт: 4 фото)</span>
+              <span style="color:var(--accent-gold);" id="upload-counter">Загружено: 0/4</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:0.75rem;">
+              
+              <!-- Slot 1: Правая ладонь -->
+              <div class="upload-slot-card" id="slot-right-palm" onclick="document.getElementById('input-right-palm').click()">
+                <input type="file" id="input-right-palm" class="palm-file-input" accept="image/*">
+                <div class="slot-icon">✋</div>
+                <div class="slot-info">
+                  <strong>Правая: Ладонь</strong>
+                  <span class="slot-desc">Текущие линии и холмы</span>
+                  <span class="slot-status" id="status-right-palm">Нажмите для загрузки</span>
+                </div>
+              </div>
+
+              <!-- Slot 2: Правая тыльная -->
+              <div class="upload-slot-card" id="slot-right-dorsal" onclick="document.getElementById('input-right-dorsal').click()">
+                <input type="file" id="input-right-dorsal" class="palm-file-input" accept="image/*">
+                <div class="slot-icon">🦴</div>
+                <div class="slot-info">
+                  <strong>Правая: Снаружи</strong>
+                  <span class="slot-desc">Суставы, узлы, фаланги</span>
+                  <span class="slot-status" id="status-right-dorsal">Нажмите для загрузки</span>
+                </div>
+              </div>
+
+              <!-- Slot 3: Левая ладонь -->
+              <div class="upload-slot-card" id="slot-left-palm" onclick="document.getElementById('input-left-palm').click()">
+                <input type="file" id="input-left-palm" class="palm-file-input" accept="image/*">
+                <div class="slot-icon">🤚</div>
+                <div class="slot-info">
+                  <strong>Левая: Ладонь</strong>
+                  <span class="slot-desc">Врожденный потенциал</span>
+                  <span class="slot-status" id="status-left-palm">Нажмите для загрузки</span>
+                </div>
+              </div>
+
+              <!-- Slot 4: Левая тыльная -->
+              <div class="upload-slot-card" id="slot-left-dorsal" onclick="document.getElementById('input-left-dorsal').click()">
+                <input type="file" id="input-left-dorsal" class="palm-file-input" accept="image/*">
+                <div class="slot-icon">🦴</div>
+                <div class="slot-info">
+                  <strong>Левая: Снаружи</strong>
+                  <span class="slot-desc">Природный костный тип</span>
+                  <span class="slot-status" id="status-left-dorsal">Нажмите для загрузки</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Comparative Evolution Summary (Left vs Right) -->
+          <div id="evolution-summary-card" style="margin-top:1rem; font-size:0.82rem; color:var(--text-main); background:rgba(255,255,255,0.02); padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:4px;">
+            <div style="font-weight:600; color:var(--accent-gold); display:flex; justify-content:space-between;">
+              <span>⚖️ Эволюция: Врожденное (Левая) ⟷ Реализованное (Правая)</span>
+              <span id="evolution-delta-badge" style="color:#38ef7d;">Синхронно</span>
+            </div>
+            <p id="evolution-text" style="color:var(--text-muted); font-size:0.78rem;">
+              Загрузите фото обеих рук для автоматического сопоставления родовых программ и личных достижений.
+            </p>
+          </div>
+
+          <div id="palm-summary-text" style="margin-top:0.75rem; font-size:0.84rem; color:var(--text-main); background:rgba(255,255,255,0.02); padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- Resonance & Esoteric Synthesis Showcase -->
+      <section class="synthesis-section">
+        <div class="synthesis-header">
+          <div class="synthesis-header-text">
+            <h2 id="synth-archetype">Архетип: Синтез Космоса и Тела</h2>
+            <p id="synth-summary" style="color:var(--text-muted); font-size:0.92rem; max-width:850px;">
+              Анализ сопоставления астрологической натальной карты и физической конституции ладони.
+            </p>
+          </div>
+
+          <div class="resonance-dial-box">
+            <div id="resonance-dial" class="dial-circle">
+              <span id="dial-percent" class="dial-value">85%</span>
+            </div>
+            <div class="dial-label">
+              <h4>Резонанс Систем</h4>
+              <p>Согласованность карты и руки</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Convergences and Contradictions Grid -->
+        <div id="synthesis-cards-grid" class="synthesis-grid">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Classic Treatises Showcase: William G. Benham & L.G. Sternberg / Desbarrolles -->
+        <div id="classic-treatises-section" style="margin-top:2rem; display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:1.25rem;">
+          
+          <!-- Card 1: William G. Benham Archetype -->
+          <div class="treatise-card" id="benham-card" style="background:rgba(14,18,34,0.85); border:1px solid var(--border-glow); border-radius:var(--radius-md); padding:1.25rem; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div>
+                <h3 style="font-family:var(--font-main); font-size:1.1rem; color:var(--accent-gold); display:flex; align-items:center; gap:6px;">
+                  <span>👑</span> Архетип по У. Бенхаму (1900)
+                </h3>
+                <span style="font-size:0.75rem; color:var(--text-muted);">The Laws of Scientific Hand Reading • 7 планетарных типов</span>
+              </div>
+              <span class="badge-tag philosophic" id="benham-archetype-badge" style="font-size:0.75rem; white-space:nowrap;">Сатурнианец</span>
+            </div>
+
+            <div id="benham-title-line" style="font-weight:600; font-size:0.95rem; color:var(--text-bright); margin-top:2px;">
+              Ведущий холм: Сатурн (Архитектор Систем)
+            </div>
+
+            <p id="benham-desc" style="font-size:0.83rem; color:var(--text-main); line-height:1.55; margin:0;">
+              Психосоматический тип определяет глубинные стремления, ментальный склад и социальную роль.
+            </p>
+
+            <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:6px;">
+              <div style="font-size:0.8rem; color:#cbd5e1;">
+                <strong>🎯 Призвания и карьеры:</strong> <span id="benham-careers" style="color:var(--accent-gold);">IT-архитектура, фундаментальная наука, инженерия</span>
+              </div>
+              <div style="font-size:0.8rem; color:#cbd5e1;">
+                <strong>🩺 Зоны здоровья (Бенхам):</strong> <span id="benham-health" style="color:#f87171;">Суставы, позвоночник, меланхолия</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: L.G. Sternberg & Desbarrolles Three Worlds & Royal Thumb -->
+          <div class="treatise-card" id="sternberg-card" style="background:rgba(14,18,34,0.85); border:1px solid var(--border-glow); border-radius:var(--radius-md); padding:1.25rem; display:flex; flex-direction:column; gap:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+              <div>
+                <h3 style="font-family:var(--font-main); font-size:1.1rem; color:var(--accent-gold); display:flex; align-items:center; gap:6px;">
+                  <span>⚖️</span> Три Мира & Большой Палец (Штернберг)
+                </h3>
+                <span style="font-size:0.75rem; color:var(--text-muted);">Л.Г. Штернберг & А. Дебаролль • Фаланги и Воля</span>
+              </div>
+              <span class="badge-tag earth" id="thumb-balance-badge" style="font-size:0.75rem; white-space:nowrap;">Волевой Интеллект</span>
+            </div>
+
+            <!-- Three Worlds Progress Bars -->
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:2px;">
+              <div style="display:flex; justify-content:space-between; font-size:0.78rem;">
+                <span style="color:#93c5fd;">1. Ментальный мир (Идеи):</span>
+                <strong id="bar-mental-val" style="color:#93c5fd;">42%</strong>
+              </div>
+              <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                <div id="bar-mental-fill" style="width:42%; height:100%; background:linear-gradient(90deg, #3b82f6, #60a5fa); border-radius:3px;"></div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; font-size:0.78rem;">
+                <span style="color:#c084fc;">2. Практический мир (Логика & Дело):</span>
+                <strong id="bar-practical-val" style="color:#c084fc;">38%</strong>
+              </div>
+              <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                <div id="bar-practical-fill" style="width:38%; height:100%; background:linear-gradient(90deg, #8b5cf6, #c084fc); border-radius:3px;"></div>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; font-size:0.78rem;">
+                <span style="color:#4ade80;">3. Материальный мир (Ресурсы):</span>
+                <strong id="bar-material-val" style="color:#4ade80;">20%</strong>
+              </div>
+              <div style="height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden;">
+                <div id="bar-material-fill" style="width:20%; height:100%; background:linear-gradient(90deg, #10b981, #4ade80); border-radius:3px;"></div>
+              </div>
+            </div>
+
+            <!-- Thumb Formula Interpretation -->
+            <div id="thumb-formula-text" style="font-size:0.81rem; color:var(--text-muted); line-height:1.5; background:rgba(255,255,255,0.02); padding:8px 10px; border-radius:6px; border:1px solid var(--border-subtle); margin-top:2px;">
+              Формула большого пальца: Равновесие Воли (1-я фаланга) и Логики (2-я фаланга) на фундаменте витальности холма Венеры.
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Chronological Time Bridge (Астрологические Циклы ⟷ Линии Ладони 0-70+ лет) -->
+        <div class="chronology-section" id="chronology-card" style="margin-top:2rem; background:rgba(14,18,34,0.75); border:1px solid var(--border-glow); border-radius:var(--radius-md); padding:1.5rem;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
+            <div>
+              <h3 style="font-family:var(--font-main); font-size:1.15rem; color:var(--accent-gold); display:flex; align-items:center; gap:0.5rem;">
+                <span>⏳</span> Хронологический Мост Жизни: Планетарные Циклы ⟷ Линии Ладони
+              </h3>
+              <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem;">
+                Синхронизация возрастной датировки линий Жизни и Судьбы (шкала Беньхама 0–70+ лет) с астрологическими кризисами взросления.
+              </p>
+            </div>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <span class="badge-tag philosophic" id="current-age-badge">Возраст: 30 лет</span>
+              <span class="badge-tag earth" id="realization-score-badge">Воля: 114%</span>
+            </div>
+          </div>
+
+          <div id="chronology-narrative" style="font-size:0.85rem; color:var(--text-main); margin-bottom:1.25rem; line-height:1.6; background:rgba(255,255,255,0.02); padding:0.75rem 1rem; border-radius:var(--radius-sm); border:1px solid var(--border-subtle);">
+            <!-- Populated dynamically -->
+          </div>
+
+          <!-- Milestones horizontal bar / grid -->
+          <div id="chronology-milestones-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:1rem;">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+
+        <!-- Practical Guidance Section -->
+        <div style="margin-top:2rem; background:rgba(14,18,34,0.7); border:1px solid var(--border-subtle); border-radius:var(--radius-md); padding:1.25rem;">
+          <h4 style="font-family:var(--font-main); color:var(--accent-gold); margin-bottom:0.75rem; font-size:1.05rem;">
+            🧭 Стратегические Рекомендации & Векторы Развития
+          </h4>
+          <ul id="synth-advice-list" style="padding-left:1.5rem; font-size:0.88rem; color:var(--text-main); line-height:1.7;">
+            <!-- Populated dynamically -->
+          </ul>
+        </div>
+      </section>
+
+      <!-- Dynamic Transits Forecast Radar -->
+      <section class="transits-section">
+        <div class="transits-header">
+          <div>
+            <h3 style="font-family:var(--font-main); font-size:1.2rem; color:var(--text-bright); display:flex; align-items:center; gap:0.5rem;">
+              <span>⚡</span> Транзитный Радар: Пиковые Аспекты (Ближайшие 30 Дней)
+            </h3>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin-top:0.25rem;">
+              Вычисление точных моментов взаимодействия текущего движения планет с вашей натальной картой.
+            </p>
+          </div>
+          <button id="btn-fetch-transits" class="btn-pill">
+            <span>🔄</span> Обновить прогноз
+          </button>
+        </div>
+
+        <div id="transits-cards-scroll" class="timeline-cards-scroll">
+          <!-- Populated dynamically -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Modal for Detailed Inspection -->
+    <div id="modal-overlay" class="modal-overlay">
+      <div class="modal-card">
+        <button id="modal-close-btn" class="modal-close">&times;</button>
+        <h3 id="modal-title" style="font-family:var(--font-main); font-size:1.2rem; color:var(--accent-gold); margin-bottom:1rem;">Инспекция</h3>
+        <div id="modal-body" style="font-size:0.9rem; line-height:1.6; color:var(--text-main);"></div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>AstroPalm Nexus • Разработано с использованием Swiss Ephemeris & Компьютерного Зрения • 2026</p>
+    </footer>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/static/js/natal_wheel.js"></script>
+  <script src="/static/js/palm_canvas.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
