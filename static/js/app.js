@@ -354,6 +354,10 @@ function initEventListeners() {
       palmCanvas.setView(view);
       if (handStudio.images[view]) {
         palmCanvas.setImage(handStudio.images[view]);
+        const curT = palmCanvas.getTransform();
+        if (curT.scale === 1.0 && curT.offsetX === 0 && curT.offsetY === 0) {
+          palmCanvas.autoFitToPhoto();
+        }
       } else {
         palmCanvas.setImage(null);
       }
@@ -384,6 +388,8 @@ function initEventListeners() {
             handStudio.images[key] = img;
             if (handStudio.currentView === key) {
               palmCanvas.setImage(img);
+              palmCanvas.autoFitToPhoto();
+              syncCalibrationUI();
             }
           };
           img.src = ev.target.result;

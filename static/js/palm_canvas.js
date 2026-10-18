@@ -36,23 +36,23 @@ class PalmCanvas {
     // Canonical mounts when thumb is on the RIGHT (width 400, height 500)
     // Thumb is on right (x ~ 275..360), Pinky is on left (x ~ 60..100)
     this.canonicalMountsThumbRight = [
-      { id: "jupiter", name_ru: "Холм Юпитера", planet: "Юпитер", symbol: "♃", x: 265, y: 195, r: 24, color: "#38ef7d", finger: "Указательный палец" },
-      { id: "saturn", name_ru: "Холм Сатурна", planet: "Сатурн", symbol: "♄", x: 202, y: 185, r: 23, color: "#9d72ff", finger: "Средний палец" },
-      { id: "apollo", name_ru: "Холм Солнца (Аполлона)", planet: "Солнце", symbol: "☉", x: 138, y: 195, r: 23, color: "#f6c85f", finger: "Безымянный палец" },
-      { id: "mercury", name_ru: "Холм Меркурия", planet: "Меркурий", symbol: "☿", x: 80, y: 220, r: 20, color: "#00d2ff", finger: "Мизинец" },
-      { id: "mars_upper", name_ru: "Верхний Марс (пассивный)", planet: "Марс", symbol: "♂", x: 70, y: 285, r: 22, color: "#ff5252", finger: "Ребро ладони" },
-      { id: "moon", name_ru: "Холм Луны (гипотенар)", planet: "Луна", symbol: "☽", x: 95, y: 385, r: 36, color: "#a5b4fc", finger: "Основание ладони" },
-      { id: "venus", name_ru: "Холм Венеры (тенар)", planet: "Венера", symbol: "♀", x: 270, y: 345, r: 44, color: "#f472b6", finger: "Большой палец" },
-      { id: "mars_lower", name_ru: "Нижний Марс (активный)", planet: "Марс", symbol: "♂", x: 270, y: 255, r: 20, color: "#fb923c", finger: "Основание большого пальца" },
-      { id: "mars_plain", name_ru: "Равнина Марса (центр)", planet: "Марс", symbol: "⚔", x: 185, y: 285, r: 26, color: "#e2e8f0", finger: "Центр ладони" },
+      { id: "jupiter", name_ru: "Холм Юпитера", planet: "Юпитер", symbol: "♃", x: 270, y: 245, r: 24, color: "#38ef7d", finger: "Указательный палец" },
+      { id: "saturn", name_ru: "Холм Сатурна", planet: "Сатурн", symbol: "♄", x: 200, y: 235, r: 23, color: "#9d72ff", finger: "Средний палец" },
+      { id: "apollo", name_ru: "Холм Солнца (Аполлона)", planet: "Солнце", symbol: "☉", x: 135, y: 245, r: 23, color: "#f6c85f", finger: "Безымянный палец" },
+      { id: "mercury", name_ru: "Холм Меркурия", planet: "Меркурий", symbol: "☿", x: 75, y: 265, r: 20, color: "#00d2ff", finger: "Мизинец" },
+      { id: "mars_upper", name_ru: "Верхний Марс (пассивный)", planet: "Марс", symbol: "♂", x: 68, y: 325, r: 22, color: "#ff5252", finger: "Ребро ладони" },
+      { id: "moon", name_ru: "Холм Луны (гипотенар)", planet: "Луна", symbol: "☽", x: 95, y: 415, r: 36, color: "#a5b4fc", finger: "Основание ладони" },
+      { id: "venus", name_ru: "Холм Венеры (тенар)", planet: "Венера", symbol: "♀", x: 275, y: 385, r: 44, color: "#f472b6", finger: "Большой палец" },
+      { id: "mars_lower", name_ru: "Нижний Марс (активный)", planet: "Марс", symbol: "♂", x: 275, y: 310, r: 20, color: "#fb923c", finger: "Основание большого пальца" },
+      { id: "mars_plain", name_ru: "Равнина Марса (центр)", planet: "Марс", symbol: "⚔", x: 185, y: 330, r: 26, color: "#e2e8f0", finger: "Центр ладони" },
     ];
 
     // Canonical dorsal joints when thumb is on the RIGHT
     this.canonicalJointsThumbRight = [
-      { id: "middle_pip", name: "Нижний узел (PIP)", x: 202, y: 125, r: 12, knotty: true },
-      { id: "middle_dip", name: "Верхний узел (DIP)", x: 202, y: 75, r: 10, knotty: true },
-      { id: "index_pip", name: "Узел указательного", x: 265, y: 145, r: 11, knotty: false },
-      { id: "ring_pip", name: "Узел безымянного", x: 138, y: 145, r: 11, knotty: false },
+      { id: "middle_pip", name: "Нижний узел (PIP)", x: 200, y: 175, r: 12, knotty: true },
+      { id: "middle_dip", name: "Верхний узел (DIP)", x: 200, y: 110, r: 10, knotty: true },
+      { id: "index_pip", name: "Узел указательного", x: 265, y: 190, r: 11, knotty: false },
+      { id: "ring_pip", name: "Узел безымянного", x: 135, y: 190, r: 11, knotty: false },
     ];
 
     // Local override of mount scores and special signs marked by the user
@@ -127,12 +127,158 @@ class PalmCanvas {
   }
 
   autoFitToPhoto() {
-    if (this.userImage) {
-      // Default comfortable fit for photos taken at hand length
-      this.transforms[this.currentView] = { scale: 0.92, offsetX: 0, offsetY: 25, rotation: 0 };
-    } else {
+    if (!this.userImage) {
       this.resetTransform();
+      return;
     }
+
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const isDorsal = this.currentView.endsWith("_dorsal");
+
+    try {
+      // 1. Analyze userImage geometry using an offscreen canvas
+      const offCanvas = document.createElement("canvas");
+      const scanW = 200;
+      const scanH = 250;
+      offCanvas.width = scanW;
+      offCanvas.height = scanH;
+      const offCtx = offCanvas.getContext("2d", { willReadFrequently: true });
+
+      const imgW = this.userImage.naturalWidth || this.userImage.width;
+      const imgH = this.userImage.naturalHeight || this.userImage.height;
+      const imgAspect = imgW / imgH;
+      const canvasAspect = w / h;
+
+      let drawW, drawH, drawX, drawY;
+      if (imgAspect > canvasAspect) {
+        drawH = scanH;
+        drawW = scanH * imgAspect;
+        drawX = (scanW - drawW) / 2;
+        drawY = 0;
+      } else {
+        drawW = scanW;
+        drawH = scanW / imgAspect;
+        drawX = 0;
+        drawY = (scanH - drawH) / 2;
+      }
+
+      offCtx.drawImage(this.userImage, drawX, drawY, drawW, drawH);
+      const imgData = offCtx.getImageData(0, 0, scanW, scanH).data;
+
+      // 2. Scan for skin & hand pixels
+      let minX = scanW, maxX = 0, minY = scanH, maxY = 0;
+      let handPixelCount = 0;
+      const rowCounts = new Int32Array(scanH);
+      const colCounts = new Int32Array(scanW);
+
+      for (let y = 0; y < scanH; y++) {
+        for (let x = 0; x < scanW; x++) {
+          const idx = (y * scanW + x) * 4;
+          const r = imgData[idx];
+          const g = imgData[idx + 1];
+          const b = imgData[idx + 2];
+          const a = imgData[idx + 3];
+
+          if (a > 120) {
+            // General skin tone condition
+            const isSkin = (r > 60 && g > 40 && b > 20 && r > g && r > b && (r - g) > 8 && (r - b) > 12);
+            // Also accept bright hand palm under normal indoor lighting
+            const isHand = isSkin || (r > 120 && g > 100 && b > 80 && Math.abs(r - g) < 55 && r > b);
+
+            if (isHand) {
+              rowCounts[y]++;
+              colCounts[x]++;
+              handPixelCount++;
+              if (x < minX) minX = x;
+              if (x > maxX) maxX = x;
+              if (y < minY) minY = y;
+              if (y > maxY) maxY = y;
+            }
+          }
+        }
+      }
+
+      const scaleFactorX = w / scanW;
+      const scaleFactorY = h / scanH;
+
+      if (handPixelCount > 300 && maxY > minY + 30) {
+        // Find top of fingers (ignore top 1% noise)
+        let topY = minY;
+        for (let y = minY; y <= maxY; y++) {
+          if (rowCounts[y] > 4) { topY = y; break; }
+        }
+        let bottomY = maxY;
+        for (let y = maxY; y >= minY; y--) {
+          if (rowCounts[y] > 8) { bottomY = y; break; }
+        }
+
+        const handH = (bottomY - topY) * scaleFactorY;
+        const handTopCanvasY = topY * scaleFactorY;
+        const handBottomCanvasY = bottomY * scaleFactorY;
+
+        // Middle axis of the hand
+        const leftX = minX * scaleFactorX;
+        const rightX = maxX * scaleFactorX;
+        const handMidX = (leftX + rightX) / 2;
+
+        if (isDorsal) {
+          // Dorsal view:
+          const knuckleY = handTopCanvasY + handH * 0.44;
+          const fingerLen = Math.max(80, knuckleY - handTopCanvasY);
+
+          // Target DIP (~35% down finger) and PIP (~68% down finger)
+          const targetDIP = handTopCanvasY + fingerLen * 0.35;
+          const targetPIP = handTopCanvasY + fingerLen * 0.68;
+          const targetSpan = targetPIP - targetDIP;
+          const canonicalSpan = 65; // 175 - 110
+          const autoScale = Math.max(0.70, Math.min(1.30, targetSpan / canonicalSpan));
+          const cy = h * 0.40;
+          const autoOffsetY = Math.round(targetPIP - (cy + (175 - cy) * autoScale));
+          const autoOffsetX = Math.round(handMidX - 200);
+
+          this.transforms[this.currentView] = {
+            scale: parseFloat(autoScale.toFixed(2)),
+            offsetX: autoOffsetX,
+            offsetY: autoOffsetY,
+            rotation: 0
+          };
+        } else {
+          // Palmar view:
+          // Knuckles line is at ~42% of hand height
+          const knuckleY = handTopCanvasY + handH * 0.42;
+          const palmH = Math.max(160, handBottomCanvasY - knuckleY);
+          // Canonical palm height is approx 265px
+          const autoScale = Math.max(0.80, Math.min(1.25, palmH / 265));
+
+          // Center of transformation is cy = h * 0.58 = 290
+          const cy = h * 0.58;
+          // Desired Saturn mount Y is knuckleY + 25px
+          const targetMountY = knuckleY + 25;
+          const autoOffsetY = Math.round(targetMountY - (cy + (235 - cy) * autoScale));
+          const autoOffsetX = Math.round(handMidX - 200);
+
+          this.transforms[this.currentView] = {
+            scale: parseFloat(autoScale.toFixed(2)),
+            offsetX: autoOffsetX,
+            offsetY: autoOffsetY,
+            rotation: 0
+          };
+        }
+      } else {
+        // Fallback comfortable defaults
+        this.transforms[this.currentView] = {
+          scale: 1.0,
+          offsetX: 0,
+          offsetY: isDorsal ? 25 : 10,
+          rotation: 0
+        };
+      }
+    } catch (err) {
+      console.warn("Auto-fit vision analysis error, falling back:", err);
+      this.transforms[this.currentView] = { scale: 1.0, offsetX: 0, offsetY: isDorsal ? 25 : 10, rotation: 0 };
+    }
+
     this.draw();
   }
 
@@ -270,32 +416,32 @@ class PalmCanvas {
         if (isThumbOnRight) {
           // Right Palm (Thumb on RIGHT) with DISTINCT SEPARATED ORIGINS
           this.customLineAnchors[viewKey] = {
-            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 85, y: 255, color: "#f472b6" },
-            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 185, y: 275, color: "#f472b6" },
-            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 275, y: 230, color: "#f472b6" },
+            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 75, y: 280, color: "#f472b6" },
+            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 185, y: 295, color: "#f472b6" },
+            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 275, y: 265, color: "#f472b6" },
 
-            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 295, y: 265, color: "#00d2ff" },
-            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 200, y: 330, color: "#00d2ff" },
-            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 115, y: 365, color: "#00d2ff" },
+            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 295, y: 290, color: "#00d2ff" },
+            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 195, y: 345, color: "#00d2ff" },
+            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 115, y: 385, color: "#00d2ff" },
 
-            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 315, y: 295, color: "#f6c85f" },
-            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 260, y: 380, color: "#f6c85f" },
-            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 275, y: 475, color: "#f6c85f" },
+            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 320, y: 325, color: "#f6c85f" },
+            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 265, y: 410, color: "#f6c85f" },
+            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 275, y: 485, color: "#f6c85f" },
           };
         } else {
           // Left Palm (Thumb on LEFT)
           this.customLineAnchors[viewKey] = {
-            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 315, y: 255, color: "#f472b6" },
-            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 215, y: 275, color: "#f472b6" },
-            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 125, y: 230, color: "#f472b6" },
+            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 325, y: 280, color: "#f472b6" },
+            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 215, y: 295, color: "#f472b6" },
+            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 125, y: 265, color: "#f472b6" },
 
-            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 105, y: 265, color: "#00d2ff" },
-            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 200, y: 330, color: "#00d2ff" },
-            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 285, y: 365, color: "#00d2ff" },
+            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 105, y: 290, color: "#00d2ff" },
+            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 205, y: 345, color: "#00d2ff" },
+            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 285, y: 385, color: "#00d2ff" },
 
-            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 85, y: 295, color: "#f6c85f" },
-            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 140, y: 380, color: "#f6c85f" },
-            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 125, y: 475, color: "#f6c85f" },
+            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 80, y: 325, color: "#f6c85f" },
+            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 135, y: 410, color: "#f6c85f" },
+            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 125, y: 485, color: "#f6c85f" },
           };
         }
       }
@@ -320,19 +466,19 @@ class PalmCanvas {
       if (isSeparated) {
         if (isThumbOnRight) {
           anchors.head_start.x = 295;
-          anchors.head_start.y = 265;
-          anchors.life_start.x = 318;
-          anchors.life_start.y = 298;
+          anchors.head_start.y = 290;
+          anchors.life_start.x = 320;
+          anchors.life_start.y = 325;
         } else {
           anchors.head_start.x = 105;
-          anchors.head_start.y = 265;
-          anchors.life_start.x = 82;
-          anchors.life_start.y = 298;
+          anchors.head_start.y = 290;
+          anchors.life_start.x = 80;
+          anchors.life_start.y = 325;
         }
       } else {
         // Joined together
         const commonX = isThumbOnRight ? 305 : 95;
-        const commonY = 278;
+        const commonY = 305;
         anchors.head_start.x = commonX;
         anchors.head_start.y = commonY;
         anchors.life_start.x = commonX;
@@ -1038,17 +1184,16 @@ class PalmCanvas {
 
   drawFeatureTooltip(ctx, w, h, feat) {
     ctx.save();
-    const boxW = 230;
-    const boxH = 58;
+    const hudX = 10;
+    const hudY = 10;
+    const hudW = w - 20;
+    const hudH = 34;
 
-    let posX = Math.min(w - boxW - 10, Math.max(10, feat.data.x - boxW / 2));
-    let posY = Math.max(10, feat.data.y - (feat.data.r || 20) - boxH - 10);
-
-    ctx.fillStyle = "rgba(10, 14, 30, 0.95)";
-    ctx.strokeStyle = "var(--accent-gold)";
-    ctx.lineWidth = 1;
+    ctx.fillStyle = "rgba(10, 14, 30, 0.88)";
+    ctx.strokeStyle = "#f6c85f";
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
-    ctx.roundRect(posX, posY, boxW, boxH, 8);
+    ctx.roundRect(hudX, hudY, hudW, hudH, 6);
     ctx.fill();
     ctx.stroke();
 
@@ -1057,27 +1202,35 @@ class PalmCanvas {
       const m = feat.data;
       const score = m.score || 72;
       const statusRu = score >= 90 ? "Доминирующий" : (score >= 80 ? "Выраженный" : (score >= 65 ? "Сбалансированный" : "Слабый"));
+      const signLabel = m.sign ? ` ${m.sign}` : "";
 
-      ctx.font = "bold 12px Inter, sans-serif";
+      ctx.font = "bold 11px Inter, sans-serif";
       ctx.fillStyle = "#f6c85f";
-      ctx.fillText(`${m.symbol} ${m.name_ru}`, posX + 10, posY + 18);
+      ctx.fillText(`${m.symbol} ${m.name_ru}${signLabel}`, hudX + 10, hudY + 21);
 
-      ctx.font = "11px Inter, sans-serif";
-      ctx.fillStyle = "#cbd5e1";
-      ctx.fillText(`Статус: ${statusRu} (${score}/100) • Кликните для отметки`, posX + 10, posY + 34);
-
-      ctx.fillStyle = "#94a3b8";
       ctx.font = "10px Inter, sans-serif";
-      const signLabel = m.sign ? `Знак: ${m.sign}` : "Особый знак: нет";
-      ctx.fillText(`Локация: ${m.finger} • ${signLabel}`, posX + 10, posY + 48);
+      ctx.fillStyle = "#94a3b8";
+      ctx.textAlign = "right";
+      ctx.fillText(`${statusRu} (${score} б.) • Нажмите для настройки`, hudX + hudW - 10, hudY + 21);
     } else if (feat.type === "joint") {
-      ctx.font = "bold 12px Inter, sans-serif";
+      ctx.font = "bold 11px Inter, sans-serif";
       ctx.fillStyle = "#00d2ff";
-      ctx.fillText(feat.data.name, posX + 10, posY + 22);
+      ctx.fillText(`🔹 ${feat.data.name}`, hudX + 10, hudY + 21);
 
-      ctx.font = "11px Inter, sans-serif";
-      ctx.fillStyle = "#cbd5e1";
-      ctx.fillText("Суставное сочленение фаланг пальцев", posX + 10, posY + 40);
+      ctx.font = "10px Inter, sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.textAlign = "right";
+      ctx.fillText("Суставное сочленение фаланг", hudX + hudW - 10, hudY + 21);
+    } else if (feat.type === "line_anchor") {
+      const a = feat.data;
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillStyle = a.color || "#f6c85f";
+      ctx.fillText(`⚓ ${a.name}`, hudX + 10, hudY + 21);
+
+      ctx.font = "10px Inter, sans-serif";
+      ctx.fillStyle = "#94a3b8";
+      ctx.textAlign = "right";
+      ctx.fillText("Перетаскивайте для калибровки", hudX + hudW - 10, hudY + 21);
     }
 
     ctx.restore();
