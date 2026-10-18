@@ -972,30 +972,27 @@ class PalmCanvas {
       const gap = Math.round(Math.hypot(hds.x - ls.x, hds.y - ls.y));
       const isSeparated = gap >= 15;
 
-      // Draw dashed connector line between origins
+      // Draw subtle dashed connector line between origins
       ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = isSeparated ? "rgba(56, 239, 125, 0.7)" : "rgba(246, 200, 95, 0.5)";
-      ctx.lineWidth = 1.8;
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = isSeparated ? "rgba(56, 239, 125, 0.8)" : "rgba(246, 200, 95, 0.6)";
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(hds.x, hds.y);
       ctx.lineTo(ls.x, ls.y);
       ctx.stroke();
-      ctx.restore();
 
-      // Draw text badge on midpoint
-      const midX = (hds.x + ls.x) / 2;
-      const midY = (hds.y + ls.y) / 2;
-      ctx.save();
-      ctx.font = "bold 10px sans-serif";
-      const badgeText = isSeparated ? `Разрыв ${gap}px (Независимость)` : `Соединены (${gap}px)`;
-      const textW = ctx.measureText(badgeText).width;
-      ctx.fillStyle = "rgba(10, 14, 28, 0.88)";
-      ctx.fillRect(midX - textW / 2 - 4, midY - 7, textW + 8, 14);
-      ctx.strokeStyle = isSeparated ? "#38ef7d" : "#f6c85f";
-      ctx.strokeRect(midX - textW / 2 - 4, midY - 7, textW + 8, 14);
-      ctx.fillStyle = isSeparated ? "#38ef7d" : "#f6c85f";
-      ctx.fillText(badgeText, midX - textW / 2, midY + 4);
+      // Clean glowing text label without any dark box background
+      if (this.showLineAnchors && isSeparated) {
+        const midX = (hds.x + ls.x) / 2;
+        const midY = (hds.y + ls.y) / 2;
+        ctx.font = "bold 9px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+        ctx.shadowBlur = 4;
+        ctx.fillStyle = "#38ef7d";
+        ctx.fillText(`⟷ ${gap}px`, midX, midY - 6);
+      }
       ctx.restore();
     }
 
@@ -1183,15 +1180,18 @@ class PalmCanvas {
   }
 
   drawFeatureTooltip(ctx, w, h, feat) {
-    ctx.save();
-    const hudX = 10;
-    const hudY = 10;
-    const hudW = w - 20;
-    const hudH = 34;
+    // Completely suppress any tooltip box for line anchors so lines remain 100% visible and unblocked
+    if (!feat || feat.type === "line_anchor") return;
 
-    ctx.fillStyle = "rgba(10, 14, 30, 0.88)";
-    ctx.strokeStyle = "#f6c85f";
-    ctx.lineWidth = 1.2;
+    ctx.save();
+    const hudX = 12;
+    const hudY = 10;
+    const hudW = w - 24;
+    const hudH = 30;
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.7)";
+    ctx.strokeStyle = "rgba(246, 200, 95, 0.4)";
+    ctx.lineWidth = 1.0;
     ctx.beginPath();
     ctx.roundRect(hudX, hudY, hudW, hudH, 6);
     ctx.fill();
@@ -1206,31 +1206,21 @@ class PalmCanvas {
 
       ctx.font = "bold 11px Inter, sans-serif";
       ctx.fillStyle = "#f6c85f";
-      ctx.fillText(`${m.symbol} ${m.name_ru}${signLabel}`, hudX + 10, hudY + 21);
+      ctx.fillText(`${m.symbol} ${m.name_ru}${signLabel}`, hudX + 10, hudY + 19);
 
       ctx.font = "10px Inter, sans-serif";
       ctx.fillStyle = "#94a3b8";
       ctx.textAlign = "right";
-      ctx.fillText(`${statusRu} (${score} б.) • Нажмите для настройки`, hudX + hudW - 10, hudY + 21);
+      ctx.fillText(`${statusRu} (${score} б.) • Кликните для настройки`, hudX + hudW - 10, hudY + 19);
     } else if (feat.type === "joint") {
       ctx.font = "bold 11px Inter, sans-serif";
       ctx.fillStyle = "#00d2ff";
-      ctx.fillText(`🔹 ${feat.data.name}`, hudX + 10, hudY + 21);
+      ctx.fillText(`🔹 ${feat.data.name}`, hudX + 10, hudY + 19);
 
       ctx.font = "10px Inter, sans-serif";
       ctx.fillStyle = "#94a3b8";
       ctx.textAlign = "right";
-      ctx.fillText("Суставное сочленение фаланг", hudX + hudW - 10, hudY + 21);
-    } else if (feat.type === "line_anchor") {
-      const a = feat.data;
-      ctx.font = "bold 11px Inter, sans-serif";
-      ctx.fillStyle = a.color || "#f6c85f";
-      ctx.fillText(`⚓ ${a.name}`, hudX + 10, hudY + 21);
-
-      ctx.font = "10px Inter, sans-serif";
-      ctx.fillStyle = "#94a3b8";
-      ctx.textAlign = "right";
-      ctx.fillText("Перетаскивайте для калибровки", hudX + hudW - 10, hudY + 21);
+      ctx.fillText("Суставное сочленение фаланг", hudX + hudW - 10, hudY + 19);
     }
 
     ctx.restore();
