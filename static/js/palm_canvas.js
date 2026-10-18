@@ -561,8 +561,12 @@ class PalmCanvas {
           const anchors = this.customLineAnchors[viewKey];
           if (anchors?.head_start && anchors?.life_start) {
             const gap = Math.round(Math.hypot(anchors.head_start.x - anchors.life_start.x, anchors.head_start.y - anchors.life_start.y));
+            const refPalmH = 260.0 * (this.calibration.scale || 1.0);
+            const gapRatio = Number((gap / refPalmH).toFixed(4));
+            const gapPercent = (gapRatio * 100).toFixed(1);
+            const isSeparated = gapRatio >= 0.045;
             if (this.options.onLinesUpdated) {
-              this.options.onLinesUpdated(gap, gap >= 15);
+              this.options.onLinesUpdated(gap, isSeparated, gapRatio, gapPercent);
             }
           }
         }
@@ -967,10 +971,13 @@ class PalmCanvas {
       ctx.stroke();
     }
 
-    // 4. Measure Gap between Life Start and Head Start (Separated vs Joined)
+    // 4. Measure Relative Biometric Gap between Life Start and Head Start
     if (hds && ls) {
       const gap = Math.round(Math.hypot(hds.x - ls.x, hds.y - ls.y));
-      const isSeparated = gap >= 15;
+      const refPalmH = 260.0 * (this.calibration.scale || 1.0);
+      const gapRatio = Number((gap / refPalmH).toFixed(4));
+      const gapPercent = (gapRatio * 100).toFixed(1);
+      const isSeparated = gapRatio >= 0.045;
 
       // Draw subtle dashed connector line between origins
       ctx.save();
@@ -991,7 +998,7 @@ class PalmCanvas {
         ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
         ctx.shadowBlur = 4;
         ctx.fillStyle = "#38ef7d";
-        ctx.fillText(`⟷ ${gap}px`, midX, midY - 6);
+        ctx.fillText(`⟷ ${gapPercent}%`, midX, midY - 6);
       }
       ctx.restore();
     }

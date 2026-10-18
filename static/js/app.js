@@ -132,20 +132,21 @@ function initVisualizers() {
         `);
       }
     },
-    onLinesUpdated: (gap, isSeparated) => {
-      updateLineSeparationUI(gap, isSeparated);
+    onLinesUpdated: (gap, isSeparated, gapRatio, gapPercent) => {
+      updateLineSeparationUI(gap, isSeparated, gapRatio, gapPercent);
     },
   });
 }
 
-async function updateLineSeparationUI(gap, isSeparated) {
+async function updateLineSeparationUI(gap, isSeparated, gapRatio, gapPercent) {
   const statusBadge = document.getElementById("line-separation-status");
+  const pctStr = gapPercent || ((gap / 260) * 100).toFixed(1);
   if (statusBadge) {
     if (isSeparated) {
-      statusBadge.textContent = `Разделены (${gap}px • Независимость)`;
+      statusBadge.textContent = `Разделены (Биометрия: ${pctStr}% • Независимость)`;
       statusBadge.style.color = "#38ef7d";
     } else {
-      statusBadge.textContent = `Соединены (${gap}px • Осмотрительность)`;
+      statusBadge.textContent = `Соединены (Биометрия: ${pctStr}% • Осмотрительность)`;
       statusBadge.style.color = "#f6c85f";
     }
   }
@@ -155,6 +156,8 @@ async function updateLineSeparationUI(gap, isSeparated) {
       if (!currentPalmFeatures.detected_lines) currentPalmFeatures.detected_lines = {};
       currentPalmFeatures.detected_lines.head_life_separated = isSeparated;
       currentPalmFeatures.detected_lines.gap_distance_px = gap;
+      currentPalmFeatures.detected_lines.gap_ratio = gapRatio || (gap / 260.0);
+      currentPalmFeatures.detected_lines.gap_percent = parseFloat(pctStr);
 
       if (currentNatalChart) {
         const synthResp = await fetch("/api/synthesis", {

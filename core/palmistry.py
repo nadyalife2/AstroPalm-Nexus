@@ -371,11 +371,19 @@ def detect_palm_creases_opencv(img_rgb: np.ndarray, is_thumb_on_right: bool = Tr
     dx = head["start"]["x"] - life["start"]["x"]
     dy = head["start"]["y"] - life["start"]["y"]
     gap = round(float(math.sqrt(dx * dx + dy * dy)), 1)
-    is_sep = bool(gap >= 15.0)
+    
+    # Relative Biometric Ratio (Relative to canonical palm height 260px on 400x500 canvas)
+    # Scale-invariant standard: threshold is 4.5% of palm height (or ~7% of middle finger)
+    reference_palm_height = 260.0
+    gap_ratio = round(gap / reference_palm_height, 4)
+    gap_percent = round(gap_ratio * 100, 1)
+    is_sep = bool(gap_ratio >= 0.045)
 
     return {
         "detected": True,
         "head_life_separated": is_sep,
+        "gap_ratio": gap_ratio,
+        "gap_percent": gap_percent,
         "gap_distance_px": gap,
         "lines": {
             "heart": heart,
@@ -383,11 +391,12 @@ def detect_palm_creases_opencv(img_rgb: np.ndarray, is_thumb_on_right: bool = Tr
             "life": life,
         },
         "interpretation": (
-            f"Линия Головы и Линия Жизни начинаются раздельно (интервал {gap}px). "
+            f"Линия Головы и Линия Жизни начинаются раздельно (биометрический интервал: {gap_percent}% от высоты ладони). "
             f"Это яркий хирологический маркер врожденной независимости: раннее формирование собственных убеждений, "
             f"свобода мышления, инициативность и неприятие догматического контроля."
             if is_sep else
-            "Линия Головы и Линия Жизни соединены в истоке: осмотрительность, привязанность к семейным традициям и взвешенность решений."
+            f"Линия Головы и Линия Жизни соединены в истоке (интервал: {gap_percent}%): "
+            f"осмотрительность, привязанность к семейным традициям и взвешенность решений."
         ),
     }
 
