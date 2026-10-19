@@ -219,6 +219,8 @@ def calculate_chart(
 
     # 1. Houses and Angles
     h_sys = (house_system or "P").strip().upper()[:1].encode("ascii")
+    if abs(latitude) >= 66.0 and h_sys == b"P":
+        h_sys = b"O"  # Automatic fallback to Porphyry system for polar/circumpolar latitudes
     cusps_raw, ascmc_raw = swe.houses(jd, latitude, longitude, h_sys)
     cusps = [float(x) % 360.0 for x in cusps_raw[:12]]
     asc_lon = float(ascmc_raw[0]) % 360.0

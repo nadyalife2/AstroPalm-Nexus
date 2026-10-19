@@ -285,8 +285,11 @@ def synthesize_reading(
     if benham_archetype:
         total_checks += 1
         primary_planet = benham_archetype.get("primary_planet", "")
-        # Check matching planet in natal chart
-        matching_planet = planets.get(primary_planet, {})
+        # Check matching planet in natal chart (match by English key or Russian name)
+        matching_planet = planets.get(primary_planet) or next(
+            (p for p in natal_chart.get("planets", []) if p.get("name_ru") == primary_planet or p.get("name") == primary_planet),
+            {}
+        )
         primary_mount_name = benham_archetype.get("primary_name", "")
         
         if matching_planet:

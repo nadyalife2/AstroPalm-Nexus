@@ -291,6 +291,24 @@ def _detect_landmarks_opencv(img_rgb: np.ndarray) -> Optional[dict[str, Any]]:
     c = max(valid_contours, key=cv2.contourArea)
     x, y, cw, ch = cv2.boundingRect(c)
 
+    # Measure width profile along vertical slices of hand contour to separate palm from fingers
+    roi_thresh = thresh[y:y+ch, x:x+cw]
+    row_widths = np.sum(roi_thresh > 128, axis=1)
+
+    max_row_w = float(np.max(row_widths)) if len(row_widths) > 0 else float(cw)
+    palm_rows = np.where(row_widths >= max_row_w * 0.65)[0]
+
+    if len(palm_rows) > 0:
+        # MCP joint row (knuckle base where fingers merge into palm)
+        mcp_y_rel = int(palm_rows[0])
+        finger_len = float(max(20, mcp_y_rel))
+        true_palm_height = float(max(30, ch - mcp_y_rel))
+        true_palm_width = float(np.percentile(row_widths[mcp_y_rel:], 85))
+    else:
+        finger_len = float(ch * 0.44)
+        true_palm_height = float(ch * 0.56)
+        true_palm_width = float(cw)
+
     # Approximate landmarks relative to bounding box
     landmarks = [
         {"id": 0, "name": "wrist", "x": x + cw * 0.5, "y": y + ch * 0.95},
@@ -308,9 +326,9 @@ def _detect_landmarks_opencv(img_rgb: np.ndarray) -> Optional[dict[str, Any]]:
 
     return {
         "landmarks": landmarks,
-        "palm_width": float(cw),
-        "palm_height": float(ch),
-        "middle_finger_len": float(ch * 0.42),
+        "palm_width": true_palm_width,
+        "palm_height": true_palm_height,
+        "middle_finger_len": finger_len,
     }
 
 
@@ -332,7 +350,7 @@ def detect_palm_creases_opencv(img_rgb: np.ndarray, is_thumb_on_right: bool = Tr
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k_size, k_size))
     blackhat = cv2.morphologyEx(enhanced, cv2.MORPH_BLACKHAT, kernel)
 
-    # Crease coordinates calibrated to 400x500 canvas
+    # Base canonical crease anchors calibrated to 400x500 canvas
     if is_thumb_on_right:
         # Thumb on RIGHT (right palm view)
         heart = {
@@ -367,6 +385,46 @@ def detect_palm_creases_opencv(img_rgb: np.ndarray, is_thumb_on_right: bool = Tr
             "mid": {"x": 140.0, "y": 380.0},
             "end": {"x": 125.0, "y": 475.0},
         }
+
+    # Real Computer Vision Crease Profiling via Black-Hat morphological transformation:
+    # Scale blackhat to canvas space (400x500) for exact visual coordinate mapping
+    bh_400 = cv2.resize(blackhat, (400, 500))
+    roi_x1, roi_x2 = (255, 345) if is_thumb_on_right else (55, 145)
+    roi_y1, roi_y2 = 235, 340
+    roi = bh_400[roi_y1:roi_y2, roi_x1:roi_x2]
+
+    if roi.size > 0:
+        profile_y = np.mean(roi, axis=1)
+        if len(profile_y) >= 12:
+            profile_smooth = np.convolve(profile_y, np.ones(5) / 5.0, mode="same")
+            mid_split = len(profile_smooth) // 2
+            head_offset = int(np.argmax(profile_smooth[:mid_split]))
+            life_offset = mid_split + int(np.argmax(profile_smooth[mid_split:]))
+
+            valleys = profile_smooth[head_offset:life_offset + 1]
+            valley_min = float(np.min(valleys)) if len(valleys) > 0 else 0.0
+            peak_mean = float((profile_smooth[head_offset] + profile_smooth[life_offset]) / 2.0)
+            valley_depth = peak_mean - valley_min
+
+            # Detect whether origins are separated by a distinct cutaneous valley or joined
+            if peak_mean > 8.0 and (valley_min < peak_mean * 0.72) and (life_offset - head_offset) >= 14:
+                # Clear separated origins detected from physical skin creases
+                head["start"]["y"] = float(roi_y1 + head_offset)
+                life["start"]["y"] = float(roi_y1 + life_offset)
+                if is_thumb_on_right:
+                    head["start"]["x"] = 295.0
+                    life["start"]["x"] = 315.0
+                else:
+                    head["start"]["x"] = 105.0
+                    life["start"]["x"] = 85.0
+            elif peak_mean > 6.0:
+                # Confluent / joined origins: both lines originate from the same primary skin fold
+                joined_y = float(roi_y1 + (head_offset + life_offset) / 2.0)
+                joined_x = 305.0 if is_thumb_on_right else 95.0
+                head["start"]["y"] = joined_y
+                head["start"]["x"] = joined_x
+                life["start"]["y"] = joined_y + 4.0
+                life["start"]["x"] = joined_x + (5.0 if is_thumb_on_right else -5.0)
 
     dx = head["start"]["x"] - life["start"]["x"]
     dy = head["start"]["y"] - life["start"]["y"]
@@ -455,18 +513,26 @@ def analyze_dorsal_hand(img_rgb: np.ndarray) -> dict[str, Any]:
     if not raw_vals:
         raw_vals = [20, 20, 20]
 
-    max_w = max(raw_vals)
-    min_w = max(1, min(raw_vals))
-    knotty_ratio = round(max_w / min_w, 2)
+    # Split finger profile into distal (DIP - upper philosophical knot) and proximal (PIP - lower order knot)
+    mid_idx = len(raw_vals) // 2
+    upper_vals = raw_vals[:mid_idx] if mid_idx >= 3 else raw_vals
+    lower_vals = raw_vals[mid_idx:] if mid_idx >= 3 else raw_vals
 
-    has_knots = knotty_ratio >= 1.18
-    has_upper = has_knots
-    has_lower = knotty_ratio >= 1.25
+    upper_ratio = round(max(upper_vals) / max(1, min(upper_vals)), 2)
+    lower_ratio = round(max(lower_vals) / max(1, min(lower_vals)), 2)
+    knotty_ratio = max(upper_ratio, lower_ratio)
 
-    if has_knots and has_lower:
+    # In human anatomy and Benham/Desbarrolles, PIP (material order knot) develops at 1.18,
+    # while DIP (philosophical knot) is finer and manifests at 1.14
+    has_upper = upper_ratio >= 1.14
+    has_lower = lower_ratio >= 1.18
+
+    if has_upper and has_lower:
         j_type = "Двойной узел (Философская рука)"
-    elif has_knots:
-        j_type = "Верхний философский узел"
+    elif has_upper:
+        j_type = "Верхний философский узел (DIP)"
+    elif has_lower:
+        j_type = "Узел материального порядка (PIP)"
     else:
         j_type = "Гладкие пальцы"
 

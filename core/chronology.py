@@ -20,6 +20,7 @@ PLANET_RU = {
     "Neptune": "Нептун",
     "Pluto": "Плутон",
     "TrueNode": "Северный Узел",
+    "North Node": "Северный Узел",
     "Chiron": "Хирон",
 }
 
