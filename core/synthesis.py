@@ -278,9 +278,10 @@ def synthesize_reading(
         })
 
     # 7. William G. Benham Archetype & Planetary Resonance
-    benham_archetype = palm_features.get("benham_archetype")
-    if not benham_archetype and palm_features.get("mounts"):
-        benham_archetype = classify_benham_archetype(palm_features.get("mounts", {}))
+    if palm_features.get("mounts"):
+        benham_archetype = classify_benham_archetype(palm_features["mounts"])
+    else:
+        benham_archetype = palm_features.get("benham_archetype")
 
     if benham_archetype:
         total_checks += 1
@@ -346,6 +347,44 @@ def synthesize_reading(
             ),
             "impact": "high",
         })
+
+    # 10. Special Mount Markings (Star, Trident, Square, Triangle vs Grille, Cross)
+    SIGN_MEANINGS = {
+        "✨": {"title": "Звезда", "effect": "благоприятный", "type": "convergences", "bonus": 1.5, "desc": "Вспышка гениальности, внезапный взлет славы и покровительство высших сил."},
+        "🔱": {"title": "Трезубец", "effect": "триумфальный", "type": "convergences", "bonus": 2.0, "desc": "Королевский знак триумфа, соединяющий мудрость, славу и материальный успех."},
+        "🔺": {"title": "Треугольник", "effect": "конструктивный", "type": "convergences", "bonus": 1.5, "desc": "Научные и стратегические способности, концентрация интеллектуальной мощи."},
+        "⛨": {"title": "Квадрат", "effect": "защитный", "type": "convergences", "bonus": 1.5, "desc": "Знак ангела-хранителя: защита от кризисов, сохранение ресурсов в штормах."},
+        "▦": {"title": "Решетка", "effect": "рассеивающий", "type": "contradictions", "desc": "Утечка энергии холма через сомнения, тревожность или распыление сил."},
+        "✖": {"title": "Крест", "effect": "испытание", "type": "contradictions", "desc": "Кармическое препятствие, требующее преодоления эгоцентризма и смирения."},
+    }
+
+    if mounts:
+        for m_id, m_data in mounts.items():
+            sign = m_data.get("special_sign") or m_data.get("sign")
+            if sign and sign in SIGN_MEANINGS:
+                s_info = SIGN_MEANINGS[sign]
+                m_name = m_data.get("name_ru", m_id)
+                p_ruler = m_data.get("planet", "")
+                if s_info["type"] == "convergences":
+                    total_checks += 1
+                    resonance_points += s_info["bonus"]
+                    convergences.append({
+                        "theme": f"Особый знак на ладони: {sign} {s_info['title']} на {m_name}",
+                        "astrology": f"Резонанс с планетарным принципом ({p_ruler})",
+                        "palmistry": f"{sign} {s_info['title']} ({m_name})",
+                        "interpretation": f"Классический знак высшего порядка. {s_info['desc']} "
+                                          f"В сочетании с натальной картой это активирует сверхпотенциал по сфере {m_name.lower()}.",
+                        "impact": "high",
+                    })
+                else:
+                    contradictions.append({
+                        "theme": f"Кармический вызов: {sign} {s_info['title']} на {m_name}",
+                        "astrology": f"Напряженный аспект к сфере {p_ruler}",
+                        "palmistry": f"{sign} {s_info['title']} на {m_name}",
+                        "interpretation": f"Знак указывает на зону уязвимости: {s_info['desc']}",
+                        "recommendation": f"Направьте осознанность на балансировку качеств {m_name.lower()}, избегая импульсивных крайностей.",
+                        "impact": "medium",
+                    })
 
     # Resonance Score (0 to 100%)
     max_possible = total_checks * 2.0

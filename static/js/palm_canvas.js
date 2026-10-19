@@ -284,6 +284,12 @@ class PalmCanvas {
 
   toggleMirror() {
     this.thumbSide = (this.thumbSide === "right") ? "left" : "right";
+    const viewKey = this.currentView;
+    if (this.customLineAnchors[viewKey]) {
+      Object.values(this.customLineAnchors[viewKey]).forEach(a => {
+        a.isCustomDragged = false;
+      });
+    }
     this.draw();
   }
 
@@ -392,62 +398,70 @@ class PalmCanvas {
     const isPalmar = this.currentView.endsWith("_palm");
     if (!isPalmar) return [];
 
+    const w = this.canvas.width;
+    const h = this.canvas.height;
     const isThumbOnRight = (this.thumbSide === "right");
     const viewKey = this.currentView;
+    const t = this.transforms[this.currentView] || { scale: 1.0, offsetX: 0, offsetY: 0, rotation: 0 };
+
+    const cx = w / 2;
+    const cy = h * 0.58;
+    const rad = (t.rotation * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
 
     // If not yet initialized for this view, build from detected_lines or anatomical default
     if (!this.customLineAnchors[viewKey]) {
       const detected = this.palmData?.detected_lines?.lines;
       if (detected) {
         this.customLineAnchors[viewKey] = {
-          heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: detected.heart.start.x, y: detected.heart.start.y, color: "#f472b6" },
-          heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца", x: detected.heart.mid.x, y: detected.heart.mid.y, color: "#f472b6" },
-          heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца", x: detected.heart.end.x, y: detected.heart.end.y, color: "#f472b6" },
+          heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", baseX: detected.heart.start.x, baseY: detected.heart.start.y, color: "#f472b6" },
+          heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца", baseX: detected.heart.mid.x, baseY: detected.heart.mid.y, color: "#f472b6" },
+          heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца", baseX: detected.heart.end.x, baseY: detected.heart.end.y, color: "#f472b6" },
 
-          head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: detected.head.start.x, y: detected.head.start.y, color: "#00d2ff" },
-          head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: detected.head.mid.x, y: detected.head.mid.y, color: "#00d2ff" },
-          head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: detected.head.end.x, y: detected.head.end.y, color: "#00d2ff" },
+          head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", baseX: detected.head.start.x, baseY: detected.head.start.y, color: "#00d2ff" },
+          head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", baseX: detected.head.mid.x, baseY: detected.head.mid.y, color: "#00d2ff" },
+          head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", baseX: detected.head.end.x, baseY: detected.head.end.y, color: "#00d2ff" },
 
-          life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: detected.life.start.x, y: detected.life.start.y, color: "#f6c85f" },
-          life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: detected.life.mid.x, y: detected.life.mid.y, color: "#f6c85f" },
-          life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: detected.life.end.x, y: detected.life.end.y, color: "#f6c85f" },
+          life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", baseX: detected.life.start.x, baseY: detected.life.start.y, color: "#f6c85f" },
+          life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", baseX: detected.life.mid.x, baseY: detected.life.mid.y, color: "#f6c85f" },
+          life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", baseX: detected.life.end.x, baseY: detected.life.end.y, color: "#f6c85f" },
         };
       } else {
-        if (isThumbOnRight) {
-          // Right Palm (Thumb on RIGHT) with DISTINCT SEPARATED ORIGINS
-          this.customLineAnchors[viewKey] = {
-            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 75, y: 280, color: "#f472b6" },
-            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 185, y: 295, color: "#f472b6" },
-            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 275, y: 265, color: "#f472b6" },
+        // Base canonical coordinates (Thumb on RIGHT)
+        this.customLineAnchors[viewKey] = {
+          heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", baseX: 75, baseY: 280, color: "#f472b6" },
+          heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", baseX: 185, baseY: 295, color: "#f472b6" },
+          heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", baseX: 275, baseY: 265, color: "#f472b6" },
 
-            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 295, y: 290, color: "#00d2ff" },
-            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 195, y: 345, color: "#00d2ff" },
-            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 115, y: 385, color: "#00d2ff" },
+          head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", baseX: 295, baseY: 290, color: "#00d2ff" },
+          head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", baseX: 195, baseY: 345, color: "#00d2ff" },
+          head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", baseX: 115, baseY: 385, color: "#00d2ff" },
 
-            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 320, y: 325, color: "#f6c85f" },
-            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 265, y: 410, color: "#f6c85f" },
-            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 275, y: 485, color: "#f6c85f" },
-          };
-        } else {
-          // Left Palm (Thumb on LEFT)
-          this.customLineAnchors[viewKey] = {
-            heart_start: { id: "heart_start", line: "heart", name: "Начало Линии Сердца (под мизинцем)", x: 325, y: 280, color: "#f472b6" },
-            heart_mid: { id: "heart_mid", line: "heart", name: "Изгиб Линии Сердца (под Сатурном)", x: 215, y: 295, color: "#f472b6" },
-            heart_end: { id: "heart_end", line: "heart", name: "Окончание Линии Сердца (под Юпитером)", x: 125, y: 265, color: "#f472b6" },
-
-            head_start: { id: "head_start", line: "head", name: "Исток Линии Головы (Ума)", x: 105, y: 290, color: "#00d2ff" },
-            head_mid: { id: "head_mid", line: "head", name: "Равнина Марса (Линия Головы)", x: 205, y: 345, color: "#00d2ff" },
-            head_end: { id: "head_end", line: "head", name: "Окончание Линии Головы (к Луне)", x: 285, y: 385, color: "#00d2ff" },
-
-            life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", x: 80, y: 325, color: "#f6c85f" },
-            life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", x: 135, y: 410, color: "#f6c85f" },
-            life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", x: 125, y: 485, color: "#f6c85f" },
-          };
-        }
+          life_start: { id: "life_start", line: "life", name: "Исток Линии Жизни", baseX: 320, baseY: 325, color: "#f6c85f" },
+          life_mid: { id: "life_mid", line: "life", name: "Апекс Линии Жизни (обход Венеры)", baseX: 265, baseY: 410, color: "#f6c85f" },
+          life_end: { id: "life_end", line: "life", name: "Окончание Линии Жизни (запястье)", baseX: 275, baseY: 485, color: "#f6c85f" },
+        };
       }
     }
 
-    return Object.values(this.customLineAnchors[viewKey]);
+    return Object.values(this.customLineAnchors[viewKey]).map(a => {
+      let x, y;
+      if (a.isCustomDragged) {
+        x = a.x;
+        y = a.y;
+      } else {
+        const rawX = (a.baseX !== undefined) ? a.baseX : (a.x || 200);
+        const rawY = (a.baseY !== undefined) ? a.baseY : (a.y || 250);
+        const baseX = isThumbOnRight ? rawX : (w - rawX);
+        const baseY = rawY;
+        const dx = (baseX - cx) * t.scale;
+        const dy = (baseY - cy) * t.scale;
+        x = cx + (dx * cos - dy * sin) + t.offsetX;
+        y = cy + (dx * sin + dy * cos) + t.offsetY;
+      }
+      return Object.assign(a, { x, y });
+    });
   }
 
   resetLineAnchors() {
@@ -464,27 +478,34 @@ class PalmCanvas {
     const anchors = this.customLineAnchors[viewKey];
     if (anchors) {
       if (isSeparated) {
-        if (isThumbOnRight) {
-          anchors.head_start.x = 295;
-          anchors.head_start.y = 290;
-          anchors.life_start.x = 320;
-          anchors.life_start.y = 325;
-        } else {
-          anchors.head_start.x = 105;
-          anchors.head_start.y = 290;
-          anchors.life_start.x = 80;
-          anchors.life_start.y = 325;
-        }
+        anchors.head_start.baseX = 295;
+        anchors.head_start.baseY = 290;
+        anchors.head_start.isCustomDragged = false;
+        anchors.life_start.baseX = 320;
+        anchors.life_start.baseY = 325;
+        anchors.life_start.isCustomDragged = false;
       } else {
         // Joined together
-        const commonX = isThumbOnRight ? 305 : 95;
+        const commonX = 305;
         const commonY = 305;
-        anchors.head_start.x = commonX;
-        anchors.head_start.y = commonY;
-        anchors.life_start.x = commonX;
-        anchors.life_start.y = commonY;
+        anchors.head_start.baseX = commonX;
+        anchors.head_start.baseY = commonY;
+        anchors.head_start.isCustomDragged = false;
+        anchors.life_start.baseX = commonX;
+        anchors.life_start.baseY = commonY;
+        anchors.life_start.isCustomDragged = false;
       }
       this.draw();
+      const active = this.getActiveLineAnchors();
+      const hs = active.find(a => a.id === "head_start");
+      const ls = active.find(a => a.id === "life_start");
+      if (hs && ls && this.options.onLinesUpdated) {
+        const gap = Math.round(Math.hypot(hs.x - ls.x, hs.y - ls.y));
+        const refPalmH = 260.0 * (this.calibration.scale || 1.0);
+        const gapRatio = Number((gap / refPalmH).toFixed(4));
+        const gapPercent = (gapRatio * 100).toFixed(1);
+        this.options.onLinesUpdated(gap, gapRatio >= 0.045, gapRatio, gapPercent);
+      }
     }
   }
 
@@ -528,6 +549,7 @@ class PalmCanvas {
           if (this.customLineAnchors[viewKey]?.[aid]) {
             this.customLineAnchors[viewKey][aid].x = Math.round(pos.x);
             this.customLineAnchors[viewKey][aid].y = Math.round(pos.y);
+            this.customLineAnchors[viewKey][aid].isCustomDragged = true;
           }
           this.draw();
           if (e.cancelable) e.preventDefault();

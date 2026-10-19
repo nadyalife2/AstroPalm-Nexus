@@ -245,12 +245,25 @@ class NatalWheel {
 
     this.svg.appendChild(aspectsGroup);
 
-    // 6. Planets Markers and Glyphs Layer
+    // 6. Planets Markers and Glyphs Layer (with anti-collision orbital staggering for conjunctions)
     const planetsGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
     planetsGroup.setAttribute("class", "planets-layer");
 
-    validPlanets.forEach((p) => {
-      const pPos = lonToScreen(p.longitude, rPlanets);
+    const sortedPlanets = [...validPlanets].sort((a, b) => a.longitude - b.longitude);
+    sortedPlanets.forEach((p, i) => {
+      p._renderRadius = rPlanets;
+      if (i > 0) {
+        const prev = sortedPlanets[i - 1];
+        let diff = Math.abs(p.longitude - prev.longitude);
+        if (diff > 180) diff = 360 - diff;
+        if (diff < 8.0 && prev._renderRadius === rPlanets) {
+          p._renderRadius = rPlanets - 25; // Shift conjunction to inner orbital tier
+        }
+      }
+    });
+
+    sortedPlanets.forEach((p) => {
+      const pPos = lonToScreen(p.longitude, p._renderRadius || rPlanets);
       const pGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
       pGroup.setAttribute("class", "planet-node");
       pGroup.setAttribute("style", "cursor: pointer;");

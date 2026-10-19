@@ -511,6 +511,7 @@ def calculate_transit_range(
                                         "aspect": asp["name"],
                                         "aspect_ru": asp["name_ru"],
                                         "aspect_symbol": asp["symbol"],
+                                        "exact_angle": int(asp["angle"]),
                                         "harmonic": asp["harmonic"],
                                         "orb": round(best_sample[1], 2),
                                     })
@@ -536,6 +537,7 @@ def calculate_transit_range(
                             "aspect": asp["name"],
                             "aspect_ru": asp["name_ru"],
                             "aspect_symbol": asp["symbol"],
+                            "exact_angle": int(asp["angle"]),
                             "harmonic": asp["harmonic"],
                             "orb": round(best_sample[1], 2),
                         })

@@ -21,6 +21,10 @@ const handStudio = {
     left_dorsal: null,
   },
   images: {},
+  analysis: {
+    right: null,
+    left: null,
+  },
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -363,6 +367,13 @@ function initEventListeners() {
         }
       } else {
         palmCanvas.setImage(null);
+      }
+      if (view.startsWith("left") && handStudio.analysis?.left) {
+        currentPalmFeatures = handStudio.analysis.left;
+        renderPalmUI(currentPalmFeatures);
+      } else if (view.startsWith("right") && handStudio.analysis?.right) {
+        currentPalmFeatures = handStudio.analysis.right;
+        renderPalmUI(currentPalmFeatures);
       }
       syncCalibrationUI();
     });
@@ -805,7 +816,9 @@ async function calculatePalmAndSynthesis() {
     body: formData,
   });
   currentPalmFeatures = await palmResp.json();
+  handStudio.analysis.right = currentPalmFeatures;
   renderPalmUI(currentPalmFeatures);
+  renderEvolutionComparison(handStudio.analysis);
 
   // 3. Synthesis Call
   const synthResp = await fetch("/api/synthesis", {
@@ -837,44 +850,73 @@ function updateUploadCounter(photos) {
   }
 }
 
+async function analyzeSingleHand(palmFile, dorsalFile, handType, isDominant) {
+  const formData = new FormData();
+  if (palmFile) formData.append("file", palmFile);
+  if (dorsalFile) formData.append("dorsal_file", dorsalFile);
+  formData.append("hand_type", handType);
+  formData.append("dominant", isDominant ? "true" : "false");
+
+  const palmResp = await fetch("/api/palm/analyze", {
+    method: "POST",
+    body: formData,
+  });
+  if (!palmResp.ok) {
+    throw new Error(`Ошибка HTTP ${palmResp.status}`);
+  }
+  return await palmResp.json();
+}
+
 async function analyzeMultiSlotHands(photos) {
   const statusEl = document.getElementById("joint-auto-status");
-  if (statusEl) statusEl.textContent = "⏳ Анализ ракурсов и линий...";
+  if (statusEl) statusEl.textContent = "⏳ Анализ ракурсов и биометрии...";
 
   try {
-    const formData = new FormData();
-    // Primary active palm (right or left)
-    const primaryPalm = photos.right_palm || photos.left_palm;
-    if (primaryPalm) formData.append("file", primaryPalm);
-
-    // Dorsal hand for joints (right dorsal or left dorsal)
-    const dorsalPhoto = photos.right_dorsal || photos.left_dorsal;
-    if (dorsalPhoto) formData.append("dorsal_file", dorsalPhoto);
-
-    formData.append("hand_type", photos.right_palm ? "right" : "left");
-    formData.append("dominant", "true");
-
-    const palmResp = await fetch("/api/palm/analyze", {
-      method: "POST",
-      body: formData,
-    });
-    if (!palmResp.ok) {
-      throw new Error(`Ошибка HTTP ${palmResp.status}`);
+    // 1. Analyze right hand if right palm or dorsal is present
+    if (photos.right_palm || photos.right_dorsal) {
+      handStudio.analysis.right = await analyzeSingleHand(
+        photos.right_palm,
+        photos.right_dorsal,
+        "right",
+        true
+      );
     }
-    currentPalmFeatures = await palmResp.json();
-    renderPalmUI(currentPalmFeatures);
 
-    if (currentPalmFeatures.dorsal_analysis) {
-      const da = currentPalmFeatures.dorsal_analysis;
-      if (statusEl) statusEl.textContent = `Суставы: ${da.joints_type} (коэфф. ${da.knotty_ratio})`;
+    // 2. Analyze left hand if left palm or dorsal is present
+    if (photos.left_palm || photos.left_dorsal) {
+      handStudio.analysis.left = await analyzeSingleHand(
+        photos.left_palm,
+        photos.left_dorsal,
+        "left",
+        false
+      );
+    }
+
+    // 3. Determine active hand for UI display
+    let primaryFeatures = null;
+    if (handStudio.currentView.startsWith("left") && handStudio.analysis.left) {
+      primaryFeatures = handStudio.analysis.left;
     } else {
-      if (statusEl) statusEl.textContent = `✓ Ладонь: ${currentPalmFeatures.element_ru}`;
+      primaryFeatures = handStudio.analysis.right || handStudio.analysis.left;
     }
 
-    // Update Left vs Right Evolution Card
-    renderEvolutionComparison(photos);
+    if (primaryFeatures) {
+      currentPalmFeatures = primaryFeatures;
+      renderPalmUI(currentPalmFeatures);
 
-    if (currentNatalChart) {
+      if (currentPalmFeatures.dorsal_analysis) {
+        const da = currentPalmFeatures.dorsal_analysis;
+        if (statusEl) statusEl.textContent = `Суставы: ${da.joints_type} (коэфф. ${da.knotty_ratio})`;
+      } else {
+        if (statusEl) statusEl.textContent = `✓ Ладонь: ${currentPalmFeatures.element_ru}`;
+      }
+    }
+
+    // 4. Update Left vs Right Evolution Card with real biometrics
+    renderEvolutionComparison(handStudio.analysis);
+
+    // 5. Update Synthesis
+    if (currentNatalChart && currentPalmFeatures) {
       const synthResp = await fetch("/api/synthesis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -886,7 +928,7 @@ async function analyzeMultiSlotHands(photos) {
       if (synthResp.ok) {
         currentSynthesis = await synthResp.json();
         renderSynthesisUI(currentSynthesis);
-        showStatus("✨ Фото ладони успешно проанализировано, синтез обновлен!", "success");
+        showStatus("✨ Биометрия ладоней проанализирована, герметический синтез обновлен!", "success");
       }
     }
   } catch (err) {
@@ -896,30 +938,118 @@ async function analyzeMultiSlotHands(photos) {
   }
 }
 
-function renderEvolutionComparison(photos) {
+function renderEvolutionComparison(analysis) {
   const deltaBadge = document.getElementById("evolution-delta-badge");
   const evolText = document.getElementById("evolution-text");
   if (!evolText) return;
 
-  const hasLeft = Boolean(photos.left_palm || photos.left_dorsal);
-  const hasRight = Boolean(photos.right_palm || photos.right_dorsal);
+  const left = analysis?.left;
+  const right = analysis?.right;
 
-  if (hasLeft && hasRight) {
-    deltaBadge.textContent = "Прогрессивная эволюция";
+  if (left && right) {
+    deltaBadge.textContent = "Динамика: Левая ➔ Правая";
     deltaBadge.style.color = "var(--accent-emerald)";
+
+    // 1. Comparison of Gap (Head vs Life line separation)
+    const leftGap = typeof left.gap_percent === "number" ? left.gap_percent : (left.head_life_separation ? left.head_life_separation.gap_percent : null);
+    const rightGap = typeof right.gap_percent === "number" ? right.gap_percent : (right.head_life_separation ? right.head_life_separation.gap_percent : null);
+
+    let gapComparison = "";
+    if (leftGap !== null && rightGap !== null) {
+      const dGap = Number((rightGap - leftGap).toFixed(1));
+      if (Math.abs(dGap) > 0.5) {
+        if (dGap > 0) {
+          gapComparison = `<li><strong>Исток Линии Головы:</strong> Разрыв с Линией Жизни увеличился на <strong>+${dGap}%</strong> (с ${leftGap}% до ${rightGap}% ширины ладони). Это биометрический маркер эволюции от родовой обусловленности к полной ментальной автономии, смелости и критическому мышлению.</li>`;
+        } else {
+          gapComparison = `<li><strong>Исток Линии Головы:</strong> Сближение с Линией Жизни (сдвиг <strong>${dGap}%</strong>). Отражает рост осмотрительности, выверенности решений и уважения к проверенным традициям.</li>`;
+        }
+      } else {
+        gapComparison = `<li><strong>Исток Линии Головы:</strong> Стабильная конфигурация (~${rightGap}%). Гармоничный баланс самостоятельности и осторожности.</li>`;
+      }
+    }
+
+    // 2. Comparison of Mounts
+    const mountNames = {
+      jupiter: "Юпитер (Амбиции/Лидерство)",
+      saturn: "Сатурн (Дисциплина/Карма)",
+      apollo: "Аполлон/Солнце (Творчество/Слава)",
+      mercury: "Меркурий (Интеллект/Коммерция)",
+      venus: "Венера (Витальность/Чувства)",
+      moon: "Луна (Интуиция/Воображение)",
+      mars_positive: "Марс + (Стойкость/Мужество)",
+      mars_negative: "Марс - (Самообладание)",
+    };
+
+    let mountDeltas = [];
+    if (left.mounts && right.mounts) {
+      for (const [key, label] of Object.entries(mountNames)) {
+        const lScore = left.mounts[key]?.score ?? left.mounts[key] ?? null;
+        const rScore = right.mounts[key]?.score ?? right.mounts[key] ?? null;
+        if (typeof lScore === "number" && typeof rScore === "number") {
+          const diff = Number((rScore - lScore).toFixed(1));
+          if (Math.abs(diff) >= 0.3) {
+            mountDeltas.push({ key, label, diff, lScore, rScore });
+          }
+        }
+      }
+    }
+
+    mountDeltas.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+
+    let mountsComparison = "";
+    if (mountDeltas.length > 0) {
+      const topMounts = mountDeltas.slice(0, 3).map(m => {
+        const sign = m.diff > 0 ? `+${m.diff}` : `${m.diff}`;
+        const color = m.diff > 0 ? "var(--accent-emerald)" : "var(--accent-gold)";
+        return `<strong>${m.label}</strong>: <span style="color:${color}">${sign}</span> (с ${m.lScore} до ${m.rScore})`;
+      }).join(", ");
+      mountsComparison = `<li><strong>Эволюция бугров:</strong> ${topMounts}. Проявлена трансформация врожденного энергопотенциала в практическую деятельность.</li>`;
+    }
+
+    // 3. Comparison of Palm Proportion / Constitution
+    let constitutionComparison = "";
+    if (left.element_ru || right.element_ru) {
+      const leftElem = left.element_ru || "Не определено";
+      const rightElem = right.element_ru || "Не определено";
+      if (leftElem !== rightElem) {
+        constitutionComparison = `<li><strong>Морфология:</strong> Сдвиг доминанты со стихии <strong>${leftElem}</strong> (родовая матрица) на <strong>${rightElem}</strong> (приобретенный психотип).</li>`;
+      } else {
+        constitutionComparison = `<li><strong>Морфология:</strong> Устойчивый архетип стихии <strong>${rightElem}</strong> на обеих руках (цельность психотипа).</li>`;
+      }
+    }
+
     evolText.innerHTML = `
-      <strong>Сравнение завершено:</strong> Линия Головы и Линия Судьбы на правой (активной) руке показывают 
-      усиление осознанности и системного контроля по сравнению с базовой родовой матрицей левой руки. 
-      Врожденный потенциал успешно трансформируется в практические достижения через силу воли и аналитическую дисциплину.
+      <div style="font-size:0.86rem; line-height:1.6; color:#cbd5e1;">
+        <p style="margin-bottom:8px; color:#fff;">
+          <strong>Биометрический компаративный анализ (Левая ➔ Правая рука):</strong>
+        </p>
+        <ul style="padding-left:18px; margin:0; display:flex; flex-direction:column; gap:6px;">
+          ${gapComparison}
+          ${mountsComparison}
+          ${constitutionComparison}
+        </ul>
+      </div>
     `;
-  } else if (hasRight) {
-    deltaBadge.textContent = "Активная рука";
+  } else if (right) {
+    deltaBadge.textContent = "Активная рука (Реализация)";
     deltaBadge.style.color = "var(--accent-gold)";
-    evolText.innerHTML = "Анализируется текущая реализованная реальность (правая рука). Загрузите левую руку для оценки врожденного потенциала.";
-  } else if (hasLeft) {
-    deltaBadge.textContent = "Пассивная рука";
+    evolText.innerHTML = `
+      <strong>Анализируется реализованная матрица (правая рука):</strong> 
+      Стихия: <em>${right.element_ru || "—"}</em>, разрыв истока: <em>${right.gap_percent ?? "—"}%</em>. 
+      Для расчета биометрической дельты (врожденный потенциал vs факт) загрузите фото левой руки во 2-й слот.
+    `;
+  } else if (left) {
+    deltaBadge.textContent = "Пассивная рука (Потенциал)";
     deltaBadge.style.color = "var(--accent-purple)";
-    evolText.innerHTML = "Анализируется врожденная матрица (левая рука). Загрузите правую руку для сопоставления с реальными достижениями.";
+    evolText.innerHTML = `
+      <strong>Анализируется врожденная матрица (левая рука):</strong> 
+      Стихия: <em>${left.element_ru || "—"}</em>, разрыв истока: <em>${left.gap_percent ?? "—"}%</em>. 
+      Загрузите фото правой руки в 1-й слот для выявления эволюционного сдвига и прогресса судьбы.
+    `;
+  } else {
+    deltaBadge.textContent = "Ожидание фото";
+    deltaBadge.style.color = "var(--text-muted)";
+    evolText.innerHTML = "Загрузите фото левой и правой ладони для автоматического биометрического сравнения врожденного потенциала и реальных жизненных достижений.";
   }
 }
 
@@ -1102,32 +1232,6 @@ function showHandMeasurementGuide() {
 
 
 
-async function analyzePalmFile(file) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("hand_type", "right");
-  formData.append("dominant", "true");
-
-  const palmResp = await fetch("/api/palm/analyze", {
-    method: "POST",
-    body: formData,
-  });
-  currentPalmFeatures = await palmResp.json();
-  renderPalmUI(currentPalmFeatures);
-
-  if (currentNatalChart) {
-    const synthResp = await fetch("/api/synthesis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        natal_chart: currentNatalChart,
-        palm_features: currentPalmFeatures,
-      }),
-    });
-    currentSynthesis = await synthResp.json();
-    renderSynthesisUI(currentSynthesis);
-  }
-}
 
 // 6. UI Renderers
 function renderNatalUI(chart) {
